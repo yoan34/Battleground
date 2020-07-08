@@ -1,1 +1,4 @@
 bot/
+__pycache__/
+to_solve.rtf
+test.py

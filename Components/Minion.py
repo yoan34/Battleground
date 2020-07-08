@@ -1,12 +1,22 @@
 """
-Create Minion in a structure way.
+The class allows to create and manage minions.
+Minions has a lot of properties like:
+    -name         -img
+    -gold         -taunt
+    -atk          -passive
+    -hp           -battlecry
+    -lvl          -shield
+    -archetype    -taunt
+    and so on...
+
+For now methods are only usefull for display the minion.
 """
 
 class Minion:
 
     def __init__(self, name, gold, quick_name, atk, hp, lvl, archetype, legendary=False, img=False, img_d=False, battlecry=False,
         poisonous=False, taunt=False, passive=False,n_passive=0, deathrattle=False, shield=False, reborn=False, magnetic=False,
-        overkill=False, cleave=False, windfury=False):
+        overkill=False, cleave=False, windfury=False, morph=0):
         self.name = name
         self.gold = gold
         self.qn = quick_name
@@ -29,9 +39,12 @@ class Minion:
         self.overkill = overkill
         self.cleave = cleave
         self.windfury = windfury
+        self.maiev = 0
+        self.morph = morph
         self.id = id(self)
     
     def __str__(self):
+        """ Calls and displays the minion's view. """
         dash = '-'*3
         sep_down = 12 - (len(str(self.atk))+len(str(self.hp)))
         name = self.qn[:12].center(12,'-')
@@ -40,6 +53,9 @@ class Minion:
         self.display_effect(), self.atk, self.archetype.center(sep_down, '-'), self.hp)
     
     def display_effect(self):
+        """
+        Translates the minion's properties into a view.
+        """
         display = ''
         taunt = '-' if self.taunt else ' '
         shield_l = '(' if self.shield else '|'

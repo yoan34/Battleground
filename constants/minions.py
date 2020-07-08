@@ -1,8 +1,32 @@
+"""
+This file contain all functions about the feature of some minions.
+these functions are attached to the specific minion's object at its creation.
+The functions manages:
+	-all battlecry
+	-all passives
+	-all deathrattle (not finish)
+
+It contain a dictionary with all dates about the minions:
+	-name         -img
+	-atk          -poisonous
+	-hp           -taunt
+	-lvl          -deathrattle
+	-img          -shield
+	-archetype    -reborn
+	-battlecry    -magnetic
+	-passive      -overkill
+	and so on....
+
+It has two objects about the minions group by tier or archetype and one other
+for the specific minion 'Megasaur' who have a specific battlecry and require
+some extra data.
+"""
+
 from random import choice
 import time
 from Components.Minion import Minion
 
-def btc_token(self, minion, target, buff,  direction, isHuman):
+def btc_token(self, minion, target, buff,  direction, is_human):
     token_place = 0
     for _ in range(self.brann):
         if len(self.board) < 7:
@@ -12,6 +36,7 @@ def btc_token(self, minion, target, buff,  direction, isHuman):
                     self.timing_IA()
                     token_place += 1
                     minion_token = Minion(minion.qn+'_t', is_gold, minion.qn+'_t', 1, 1, 1, minion.archetype)
+                    hero.power['do'](self, minion=minion_token, add=False) if self.hero.deathwing else None
                     if token > 0:
                         self.execute_passive_play(minion_token)
                         self.execute_passive_play(minion_token)
@@ -31,77 +56,83 @@ def btc_token(self, minion, target, buff,  direction, isHuman):
                         else:
                             self.double[minion_token.name] = 1
 
-def btc_buff_one_minion(self, minion, target, buff, direction, isHuman):
-    all_target = self.board_position_of(target, minion)
+def btc_buff_one_minion(self, minion, target, buff, direction, is_human):
+    targets = self.board_position_of(target, minion)
     self.timing_IA()
-    if all_target:
-        pos = self.get_answer_battlecry(all_target) if isHuman else choice(all_target)-1
+    if targets:
+        pos = self.get_answer_battlecry(targets) if is_human else choice(targets)-1
         n = 2 if minion.gold else 1
         for _ in range(self.brann):
             self.board[pos].atk += buff*n
             self.board[pos].hp += buff*n
         if direction < len(self.board)//2:
             pos -= 1
-        # return (self.buff_minion, pos+2, len(self.board)+1)
+        self.bot_buff_minion(pos+2, len(self.board)) if self.is_bot else None
 
-def btc_houndMaster(self, minion, target, buff, direction, isHuman):
-    all_target = self.board_position_of(target, minion)
+def btc_houndMaster(self, minion, target, buff, direction, is_human):
+    targets = self.board_position_of(target, minion)
     self.timing_IA()
-    if all_target:
+    if targets:
+        pos = self.get_answer_battlecry(targets) if is_human else choice(targets)-1
+        n = 2 if minion.gold else 1
         for _ in range(self.brann):
-            n = 2 if minion.gold else 1
-            pos = self.get_answer_battlecry(all_target) if isHuman else choice(all_target)-1
             self.board[pos].taunt = True
             self.board[pos].atk += buff*n
             self.board[pos].hp += buff*n
-            if direction < len(self.board)//2:
+        if direction < len(self.board)//2:
                 pos -= 1
-        # return (self.buff_minion, pos+2, len(self.board)+1)
+        self.bot_buff_minion(pos+2, len(self.board)) if self.is_bot else None
 
-def btc_deckSwabbie(self, minion, target, buff, direction, isHuman):
+def btc_deckSwabbie(self, minion, target, buff, direction, is_human):
     n = 2 if minion.gold else 1
     for _ in range(self.brann):
         if self.up_cost[0] != 'M':
-            self.up_cost[0] -= 1*n
+            self.up_cost[0] -= 1*n if self.up_cost[0] > 0 else 0
 
-def btc_pogoHopper(self, minion, target, buff, direction, isHuman):
+def btc_pogoHopper(self, minion, target, buff, direction, is_human):
     n = 2 if minion.gold else 1
     for _ in range(self.brann):
         minion.atk += buff*n * self.n_pogo
         minion.hp += buff*n * self.n_pogo
     self.n_pogo += 1
 
-def btc_buff_random_minion(self, minion, target, buff, direction, isHuman):
+def btc_buff_random_minion(self, minion, target, buff, direction, is_human):
+    #dragon beast murloc
+    archetypes = self.get_board_archetype()
+    if self.hero.amalgame: # list of archetype amalgame should choice in but if empty, choice randomly in target
+            self.hero.amalgame.archetype = choice(list(set(target) - set(archetypes))) if set(target) - set(archetypes) else choice(list(target))
     for _ in range(self.brann):
         for archetype in target:
-            all_target = self.board_position_of(archetype, minion)
-            if all_target:
+            targets = self.board_position_of(archetype, minion)
+            if targets:
                 n = 2 if minion.gold else 1
-                pos = choice(all_target)-1
+                pos = choice(targets)-1
                 self.board[pos].atk += buff*n
                 self.board[pos].hp += buff*n
+    if self.hero.amalgame:
+        self.hero.amalgame.archetype = 'all'
                 
-def btc_buff_atk_all_minion(self, minion, target, buff, direction, isHuman):
-    all_target = self.board_position_of(target, minion)
-    if all_target:
+def btc_buff_atk_all_minion(self, minion, target, buff, direction, is_human):
+    targets = self.board_position_of(target, minion)
+    if targets:
+        n = 2 if minion.gold else 1
         for _ in range(self.brann):
-            n = 2 if minion.gold else 1
-            for pos in all_target:
+            for pos in targets:
                 self.board[pos-1].atk += buff*n
 
-def btc_buff_hp_all_minion(self, minion, target, buff, direction, isHuman):
-    all_target = self.board_position_of(target, minion)
-    if all_target:
+def btc_buff_hp_all_minion(self, minion, target, buff, direction, is_human):
+    targets = self.board_position_of(target, minion)
+    if targets:
         for _ in range(self.brann):
             n = 2 if minion.gold else 1
-            for pos in all_target:
+            for pos in targets:
                 self.board[pos-1].hp += buff*n
 
-def btc_buff_all_minion(self, minion, target, buff, direction, isHuman):
-    btc_buff_hp_all_minion(self, minion, target, buff, direction, isHuman)
-    btc_buff_atk_all_minion(self, minion, target, buff, direction, isHuman)
+def btc_buff_all_minion(self, minion, target, buff, direction, is_human):
+    btc_buff_hp_all_minion(self, minion, target, buff, direction, is_human)
+    btc_buff_atk_all_minion(self, minion, target, buff, direction, is_human)
 
-def btc_defenderOfArgus(self, minion, target, buff, direction, isHuman):
+def btc_defenderOfArgus(self, minion, target, buff, direction, is_human):
     n = 2 if minion.gold else 1
     if len(self.board) > 1:
         for _ in range(self.brann):
@@ -119,76 +150,90 @@ def btc_defenderOfArgus(self, minion, target, buff, direction, isHuman):
                     self.board[direction-i].atk += 1*n
                     self.board[direction-i].hp += 1*n
 
-def btc_southseaStrongarm(self, minion, target, buff, direction, isHuman):
-    btc_buff_one_minion(self, minion, target, buff*self.n_pirate, direction, isHuman)
+def btc_southseaStrongarm(self, minion, target, buff, direction, is_human):
+    btc_buff_one_minion(self, minion, target, buff*self.pirate_buy_in_turn, direction, is_human)
 
-def btc_toxfin(self, minion, target, buff, direction, isHuman):
-    all_target = self.board_position_of(target)
-    if all_target:
-        pos = self.get_answer_battlecry(all_target) if isHuman else choice(all_target)-1
+def btc_toxfin(self, minion, target, buff, direction, is_human):
+    targets = self.board_position_of(target, minion)
+    if targets:
+        pos = self.get_answer_battlecry(targets) if is_human else choice(targets)-1
         self.board[pos].poisonous = True
         if direction < len(self.board)//2:
             pos -= 1
-        # return (self.buff_minion, pos+2, len(self.board)+1)
+        self.bot_buff_minion(pos+2, len(self.board)) if self.is_bot else None
 
-def btc_annihilanBattlemaster(self, minion, target, buff, direction, isHuman):
+def btc_annihilanBattlemaster(self, minion, target, buff, direction, is_human):
     n = 2 if minion.gold else 1
     for _ in range(self.brann):
         minion.hp += (self.max_hp - self.hp) * (buff*n)
 
-def btc_vulgarHomunculus(self, minion, target, buff, direction, isHuman):
+def btc_vulgarHomunculus(self, minion, target, buff, direction, is_human):
     for _ in range(self.brann):
         self.hp -= 2
 
-def btc_murozond(self, minion, target, buff, direction, isHuman):
+def btc_murozond(self, minion, target, buff, direction, is_human):
     pass
 
-def btc_gentleMegasaur(self, minion, target, buff, direction, isHuman):
-    all_target = self.board_position_of(target, minion)
-    if len(all_target) > 0:
-        discovery = self.get_discovery(minion=minion)
-        n = 2 if minion.gold else 1
-        for _ in range(self.brann):
-            for i in range(n):
-                self.view_discover = discovery.display_discovery()
-                target_discovery = self.get_answer_discovery() if isHuman else choice([1,2,3])
-                name_buff = discovery.cards_discover[target_discovery-1]
-                if name_buff == 'crackling':
-                    for pos in all_target:
-                        self.board[pos-1].shield = True
-                elif name_buff == 'flaming':
-                    for pos in all_target:
-                        self.board[pos-1].atk += 3
-                elif name_buff == 'spores':
-                    for pos in all_target:
-                        self.board[pos-1].deathrattle = True
-                elif name_buff == 'poison':
-                    for pos in all_target:
-                        self.board[pos-1].poisonous = True
-                elif name_buff == 'massive':
-                    for pos in all_target:
-                        self.board[pos-1].taunt = True
-                elif name_buff == 'volcanic':
-                    for pos in all_target:
-                        self.board[pos-1].atk += 1
-                        self.board[pos-1].hp += 1
-                elif name_buff == 'lightning':
-                    for pos in all_target:
-                        self.board[pos-1].windfury = True
-                else:
-                    for pos in all_target:
-                        self.board[pos-1].hp += 3
-        self.view_discover = ''
-
-def btc_primalfinLookout(self, minion, target, buff, direction, isHuman):
-    if len(self.board_position_of('murloc')) > 1:
-        discovery = self.get_discovery(minion=minion)
-        self.view_discover = discovery.display_discovery()
+def btc_gentleMegasaur(self, minion, target, buff, direction, is_human):
+    targets = self.board_position_of(target, minion)
+    if len(targets) > 0:
+        discovery = self.get_discovery(minion=minion, pool=self.pool)
+        
+        if self.is_bot:
+            discovery.megasaur = True
+            time.sleep(2)
+            buff_discovery = self.see_discovery(nature='megasaur')
+            self.view_discover = discovery.display_discovery(buff_discovery)
+        else:
+            self.view_discover = discovery.display_discovery()
         n = 2 if minion.gold else 1
         for _ in range(self.brann):
             for i in range(n):
                 self.timing_IA()
-                target_discovery = self.get_answer_discovery() if isHuman else choice([1,2,3])
+                target_discovery = self.get_answer_discovery() if is_human else choice([1,2,3])
+                name_buff = discovery.cards_discover[target_discovery-1]
+                if name_buff == 'crackling':
+                    for pos in targets:
+                        self.board[pos-1].shield = True
+                elif name_buff == 'flaming':
+                    for pos in targets:
+                        self.board[pos-1].atk += 3
+                elif name_buff == 'spores':
+                    for pos in targets:
+                        self.board[pos-1].deathrattle = True
+                elif name_buff == 'poison':
+                    for pos in targets:
+                        self.board[pos-1].poisonous = True
+                elif name_buff == 'massive':
+                    for pos in targets:
+                        self.board[pos-1].taunt = True
+                elif name_buff == 'volcanic':
+                    for pos in targets:
+                        self.board[pos-1].atk += 1
+                        self.board[pos-1].hp += 1
+                elif name_buff == 'lightning':
+                    for pos in targets:
+                        self.board[pos-1].windfury = True
+                else:
+                    for pos in targets:
+                        self.board[pos-1].hp += 3
+        self.view_discover = ''
+
+def btc_primalfinLookout(self, minion, target, buff, direction, is_human):
+    if len(self.board_position_of('murloc')) > 1:
+        discovery = self.get_discovery(minion=minion, pool=self.pool)
+        n = 2 if minion.gold else 1
+        for _ in range(self.brann):
+            for i in range(n):
+                if self.is_bot:
+                    discovery.megasaur = True
+                    time.sleep(2)
+                    buff_discovery = self.see_discovery(nature='primal')
+                    self.view_discover = discovery.display_discovery(buff_discovery)
+                else:
+                    self.view_discover = discovery.display_discovery()
+                self.timing_IA()
+                target_discovery = self.get_answer_discovery() if is_human else choice([1,2,3])
                 new_minion = discovery.cards_discover[target_discovery-1]
                 new_minion = self.create_minion(False, new_minion)
                 self.hand.append(new_minion)
@@ -215,9 +260,11 @@ def pas_hangryDragon(self, minion, target, buff):
 def pas_shifterZerus(self, minion, target, buff):
     random_minion = choice(list(MINIONS))
     gold = True if minion.gold else False
+    morph = minion.morph
     minion = Minion(random_minion, gold, *[value for value in MINIONS[random_minion].values()][1:])
     minion.name  = 'shifterZerus'
-    minion.qn = "Z{}Z".format(minion.qn)
+    minion.morph = morph
+    minion.qn = "Z{}Z".format(minion.qn[:10])
     minion.passive = MINIONS['shifterZerus']['passive']
     minion.true_name = random_minion
     return minion
@@ -232,28 +279,28 @@ def pas_razorgoreTheUntamed(self, minion, target, buff):
 		minion.hp += len(n_dragon)*n
 
 def pas_cobaltScalebane(self, minion, target, buff):
-    all_target = self.board_position_of()
-    if len(all_target) > 1:
+    targets = self.board_position_of()
+    if len(targets) > 1:
         n = 2 if minion.gold else 1
-        all_target.remove(int([pos+1 for (pos, m) in enumerate(self.board) if m.id == minion.id][0]))
-        pos = choice(all_target)
+        targets.remove(int([pos+1 for (pos, m) in enumerate(self.board) if m.id == minion.id][0]))
+        pos = choice(targets)
         self.board[pos-1].atk += buff*n
 
 def pas_ironSensei(self, minion, target, buff):
-    all_target = self.board_position_of('meca')
-    if len(all_target) > 1:
+    targets = self.board_position_of('meca')
+    if len(targets) > 1:
         n = 2 if minion.gold else 1
-        all_target.remove(int([pos+1 for (pos, m) in enumerate(self.board) if m.id == minion.id][0]))
-        pos = choice(all_target)
+        targets.remove(int([pos+1 for (pos, m) in enumerate(self.board) if m.id == minion.id][0]))
+        pos = choice(targets)
         self.board[pos-1].atk += buff*n
         self.board[pos-1].hp += buff*n
 
 def pas_lightfangEnforcer(self, minion, target, buff):
-    for archetype in ('murloc', 'dragon', 'beast', 'demon', 'pirate', 'meca'):
-        all_target = self.board_position_of(archetype)
-        if all_target:
+    for archetype in ARCHETYPES:
+        targets = self.board_position_of(archetype)
+        if targets:
             n = 2 if minion.gold else 1
-            pos = choice(all_target)
+            pos = choice(targets)
             self.board[pos-1].atk += buff*n
             self.board[pos-1].hp += buff//2*n
 
@@ -309,10 +356,11 @@ def pas_floatingWatcher(self, minion, target, buff):
 
 # when 'sold' minion
 def pas_stewardOfTime(self, minion, target, buff):
-    n = 2 if minion.gold else 1
-    for minion in self.shop:
-        minion.atk += buff*n
-        minion.hp += buff*n
+	if not self.time_by_action == 0:
+		n = 2 if minion.gold else 1
+		for minion in self.shop:
+			minion.atk += buff*n
+			minion.hp += buff*n
 
 def pas_freedealingGambler(self, minion, target, buff):
     n = 2 if minion.gold else 1
@@ -321,15 +369,15 @@ def pas_freedealingGambler(self, minion, target, buff):
 
 # when 'present' minion
 def pas_murlocWarleader_southseaCaptain_malGanis_siegeBreaker(self, minion, minion_play, target, buff, action):
-    all_target = self.board_position_of(target)
+    targets = self.board_position_of(target)
     n = 2 if minion.gold else 1
     if action == 'play':
-        all_target.remove(int([pos+1 for (pos, m) in enumerate(self.board) if m.id == minion.id][0]))
+        targets.remove(int([pos+1 for (pos, m) in enumerate(self.board) if m.id == minion.id][0]))
         if minion.n_passive == 0:
             minion.n_passive += 1
             if minion.name == 'malGanis':
                 self.immunity += 1
-            for pos in all_target:
+            for pos in targets:
                 self.board[pos-1].atk += buff*n
                 if minion.name == 'southseaCaptain' or minion.name == 'malGanis':
                     self.board[pos-1].hp += buff*n
@@ -341,20 +389,20 @@ def pas_murlocWarleader_southseaCaptain_malGanis_siegeBreaker(self, minion, mini
     else:
         if minion.name == 'malGanis':
             self.immunity -= 1
-        if len(all_target) > 1:
-            for pos in all_target:
+        if len(targets) > 1:
+            for pos in targets:
                 self.board[pos-1].atk -= buff*n
                 if minion.name == 'southseaCaptain' or minion.name == 'malGanis':
                     self.board[pos-1].hp -= buff*n
 
 def pas_oldMurkEye(self, minion, minion_play, target, buff, action=False):
     n = 2 if minion.gold else 1
-    all_target = self.board_position_of(target)
+    targets = self.board_position_of(target)
     if action == 'play':
         if minion.n_passive == 0:
             self.oldmurloc += 1
         minion.n_passive += 1
-        minion.atk = (len(all_target)-1)*n + (2*n)
+        minion.atk = (len(targets)-1)*n + (2*n)
     elif action == 'sold':
         self.oldmurloc -= 1
 
@@ -390,7 +438,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'gentleMegasaur': {
 		'gold': False,
 		'qn': 'Megasaur',
@@ -417,7 +465,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'ghastcoiler': {
 		'gold': False,
 		'qn': 'Coiler',
@@ -440,7 +488,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'theTideRazor': {
 		'gold': False,
 		'qn': 'Razor',
@@ -463,7 +511,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'zappSlywick': {
 		'gold': False,
 		'qn': 'Zapp',
@@ -486,7 +534,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': True,
-	},
+		},
     'foeReaper4000': {
 		'gold': False,
 		'qn': 'Reaper',
@@ -509,7 +557,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'kalecgosArcaneAspect': {
 		'gold': False,
 		'qn': 'Kalecgos',
@@ -528,7 +576,7 @@ MINIONS = {
 			'target': 'battlecry',
 			'buff': 1,
 			'trigger': 'play',
-		},
+			},
 		'n_passive': 0,
 		'deathrattle': False,
 		'shield': False,
@@ -537,7 +585,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'mamaBear': {
 		'gold': False,
 		'qn': 'Mamabear',
@@ -556,7 +604,7 @@ MINIONS = {
 			'target': 'beast',
 			'buff': 5,
 			'trigger': 'play',
-		},
+			},
 		'n_passive': 0,
 		'deathrattle': False,
 		'shield': False,
@@ -565,7 +613,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'maexxna': {
 		'gold': False,
 		'qn': 'Maexxna',
@@ -588,7 +636,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'kangorsApprentice': {
 		'gold': False,
 		'qn': 'Kangor',
@@ -611,7 +659,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'nadinaTheRed': {
 		'gold': False,
 		'qn': 'Nadina',
@@ -634,7 +682,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'impMama': {
 		'gold': False,
 		'qn': 'ImpMama',
@@ -657,7 +705,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     #TIER 5
     'annihilanBattlemaster': {
 		'gold': False,
@@ -685,7 +733,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'baronRivendare': {
 		'gold': False,
 		'qn': 'Baron',
@@ -708,7 +756,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'brannBronzebeard': {
 		'gold': False,
 		'qn': 'Brann',
@@ -731,7 +779,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'capnHoggarr': {
 		'gold': False,
 		'qn': 'Hoggarr',
@@ -750,7 +798,7 @@ MINIONS = {
 			'target': 'pirate',
 			'buff': 1,
 			'trigger': 'buy',
-		},
+			},
 		'n_passive': 0,
 		'deathrattle': False,
 		'shield': False,
@@ -759,7 +807,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'goldrinnTheGreatWolf': {
 		'gold': False,
 		'qn': 'Goldrinn',
@@ -782,7 +830,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'ironhideDirehorn': {
 		'gold': False,
 		'qn': 'Ironhide',
@@ -805,7 +853,7 @@ MINIONS = {
 		'overkill': True,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'junkbot': {
 		'gold': False,
 		'qn': 'Junkbot',
@@ -828,7 +876,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'kingBagurgle': {
 		'gold': False,
 		'qn': 'Bagurgle',
@@ -855,7 +903,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'lightfangEnforcer': {
 		'gold': False,
 		'qn': 'Lightfang',
@@ -874,7 +922,7 @@ MINIONS = {
 			'target': 'all',
 			'buff': 2,
 			'trigger': 'end_turn',
-		},
+			},
 		'n_passive': 0,
 		'deathrattle': False,
 		'shield': False,
@@ -883,7 +931,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'malGanis': {
 		'gold': False,
 		'qn': 'Mal\'Ganis',
@@ -902,7 +950,7 @@ MINIONS = {
 			'target': 'demon',
 			'buff': 2,
 			'trigger': 'present',
-		},
+			},
 		'n_passive': 0,
 		'deathrattle': False,
 		'shield': False,
@@ -911,7 +959,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'murozond': {
 		'gold': False,
 		'qn': 'Murozond',
@@ -938,7 +986,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'natPagleExtremeAngler': {
 		'gold': False,
 		'qn': 'Nat Pagle',
@@ -961,7 +1009,7 @@ MINIONS = {
 		'overkill': True,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'primalfinLookout': {
 		'gold': False,
 		'qn': 'Primalfin',
@@ -988,7 +1036,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'razorgoreTheUntamed': {
 		'gold': False,
 		'qn': 'Razorgore',
@@ -1007,7 +1055,7 @@ MINIONS = {
 			'target': 'dragon',
 			'buff': 1,
 			'trigger': 'end_turn',
-		},
+			},
 		'n_passive': 0,
 		'deathrattle': False,
 		'shield': False,
@@ -1016,7 +1064,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'seabreakerGoliath': {
 		'gold': False,
 		'qn': 'Goliath',
@@ -1039,7 +1087,7 @@ MINIONS = {
 		'overkill': True,
 		'cleave': False,
 		'windfury': True,
-	},
+		},
     'sneedsOldShredder': {
 		'gold': False,
 		'qn': 'Sneed',
@@ -1062,7 +1110,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'strongshellScavenger': {
 		'gold': False,
 		'qn': 'Strongshell',
@@ -1089,7 +1137,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'voidlord': {
 		'gold': False,
 		'qn': 'Voidlord',
@@ -1112,7 +1160,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     # TIER 4
     'annoyOModule': {
 		'gold': False,
@@ -1136,7 +1184,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'bolvarFireblood': {
 		'gold': False,
 		'qn': 'Bolvar',
@@ -1159,7 +1207,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'caveHydra': {
 		'gold': False,
 		'qn': 'Hydra',
@@ -1182,7 +1230,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': True,
 		'windfury': False,
-	},
+		},
     'cobaltScalebane': {
 		'gold': False,
 		'qn': 'Cobalt',
@@ -1201,7 +1249,7 @@ MINIONS = {
 			'target': None,
 			'buff': 3,
 			'trigger': 'end_turn',
-		},
+			},
 		'n_passive': 0,
 		'deathrattle': False,
 		'shield': False,
@@ -1210,7 +1258,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'defenderOfArgus': {
 		'gold': False,
 		'qn': 'Argus',
@@ -1237,7 +1285,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'drakonidEnforcer': {
 		'gold': False,
 		'qn': 'Drakonid',
@@ -1260,7 +1308,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'floatingWatcher': {
 		'gold': False,
 		'qn': 'Watcher',
@@ -1279,7 +1327,7 @@ MINIONS = {
 			'target': None,
 			'buff': 2,
 			'trigger': 'play',
-		},
+			},
 		'n_passive': 0,
 		'deathrattle': False,
 		'shield': False,
@@ -1288,7 +1336,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'goldgrubber': {
 		'gold': False,
 		'qn': 'Goldgrubber',
@@ -1307,7 +1355,7 @@ MINIONS = {
 			'target': None,
 			'buff': 2,
 			'trigger': 'end_turn',
-		},
+			},
 		'n_passive': 0,
 		'deathrattle': False,
 		'shield': False,
@@ -1316,7 +1364,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'heraldOfFlame': {
 		'gold': False,
 		'qn': 'Herald',
@@ -1339,7 +1387,7 @@ MINIONS = {
 		'overkill': True,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'ironSensei': {
 		'gold': False,
 		'qn': 'Sensei',
@@ -1358,7 +1406,7 @@ MINIONS = {
 			'target': 'meca',
 			'buff': 2,
 			'trigger': 'end_turn',
-		},
+			},
 		'n_passive': 0,
 		'deathrattle': False,
 		'shield': False,
@@ -1367,7 +1415,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'mechanoEgg': {
 		'gold': False,
 		'qn': 'Mechano-Egg',
@@ -1390,7 +1438,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'menagerieMagician': {
 		'gold': False,
 		'qn': 'Menagerie',
@@ -1403,7 +1451,7 @@ MINIONS = {
 		'img_discovery': './img/discovery_minion4/menagerieMagician.png',
 		'battlecry': {
             'fc': btc_buff_random_minion,
-            'target': ('dragon', 'beast', 'murloc'),
+            'target': {'dragon', 'beast', 'murloc'},
             'buff': 2,
         },
 		'poisonous': False,
@@ -1417,7 +1465,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'ripsnarlCaptain': {
 		'gold': False,
 		'qn': 'Ripsnarl',
@@ -1440,7 +1488,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'savannahHighmane': {
 		'gold': False,
 		'qn': 'Savannah',
@@ -1463,7 +1511,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'securityRover': {
 		'gold': False,
 		'qn': 'Rover',
@@ -1486,7 +1534,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'siegeBreaker': {
 		'gold': False,
 		'qn': 'Siegebreaker',
@@ -1505,7 +1553,7 @@ MINIONS = {
 			'target': 'demon',
 			'buff': 1,
 			'trigger': 'present',
-		},
+			},
 		'n_passive': 0,
 		'deathrattle': False,
 		'shield': False,
@@ -1514,7 +1562,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'southseaStrongarm': {
 		'gold': False,
 		'qn': 'Strongarm',
@@ -1541,7 +1589,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'toxfin': {
 		'gold': False,
 		'qn': 'Toxfin',
@@ -1568,7 +1616,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'virmenSensei': {
 		'gold': False,
 		'qn': 'Virmen',
@@ -1595,7 +1643,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     # TIER 3
     'bloodsailCannoneer': {
 		'gold': False,
@@ -1623,7 +1671,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'bronzeWarden': {
 		'gold': False,
 		'qn': 'Bronze',
@@ -1646,7 +1694,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'coldlightSeer': {
 		'gold': False,
 		'qn': 'Coldlight',
@@ -1673,7 +1721,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'crowdFavorite': {
 		'gold': False,
 		'qn': 'Favorite',
@@ -1692,7 +1740,7 @@ MINIONS = {
 			'target': 'battlecry',
 			'buff': 1,
 			'trigger': 'play',
-		},
+			},
 		'n_passive': 0,
 		'deathrattle': False,
 		'shield': False,
@@ -1701,7 +1749,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'crystalweaver': {
 		'gold': False,
 		'qn': 'Crystal',
@@ -1728,7 +1776,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'deflectOBot': {
 		'gold': False,
 		'qn': 'Deflect-o-Bot',
@@ -1751,7 +1799,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'felfinNavigator': {
 		'gold': False,
 		'qn': 'Navigator',
@@ -1778,7 +1826,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'hangryDragon': {
 		'gold': False,
 		'qn': 'Hangry',
@@ -1797,7 +1845,7 @@ MINIONS = {
 			'target': None,
 			'buff': 2,
 			'trigger': 'start_turn',
-		},
+			},
 		'n_passive': 0,
 		'deathrattle': False,
 		'shield': False,
@@ -1806,7 +1854,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'houndMaster': {
 		'gold': False,
 		'qn': 'Houndmaster',
@@ -1833,7 +1881,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'impGangBoss': {
 		'gold': False,
 		'qn': 'Gang Boss',
@@ -1856,7 +1904,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'infestedWolf': {
 		'gold': False,
 		'qn': 'Wolf',
@@ -1879,7 +1927,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'khadgar': {
 		'gold': False,
 		'qn': 'Khadgar',
@@ -1902,7 +1950,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'monstrousMacaw': {
 		'gold': False,
 		'qn': 'Macaw',
@@ -1925,7 +1973,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'packLeader': {
 		'gold': False,
 		'qn': 'Leader',
@@ -1944,7 +1992,7 @@ MINIONS = {
 			'target': 'beast',
 			'buff': 3,
 			'trigger': 'play',
-		},
+			},
 		'n_passive': 0,
 		'deathrattle': False,
 		'shield': False,
@@ -1953,7 +2001,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'pilotedShredder': {
 		'gold': False,
 		'qn': 'Shredder',
@@ -1976,7 +2024,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'replicatingMenace': {
 		'gold': False,
 		'qn': 'Menace',
@@ -1999,7 +2047,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'saltyLooter': {
 		'gold': False,
 		'qn': 'Looter',
@@ -2018,7 +2066,7 @@ MINIONS = {
 			'target': 'pirate',
 			'buff': 1,
 			'trigger': 'play',
-		},
+			},
 		'n_passive': 0,
 		'deathrattle': False,
 		'shield': False,
@@ -2027,7 +2075,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'screwjankClunker': {
 		'gold': False,
 		'qn': 'Clunker',
@@ -2054,7 +2102,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'shifterZerus': {
 		'gold': False,
 		'qn': 'Zerus',
@@ -2073,7 +2121,7 @@ MINIONS = {
 			'target': None,
 			'buff': None,
 			'trigger': 'start_turn',
-		},
+			},
 		'n_passive': 0,
 		'deathrattle': False,
 		'shield': False,
@@ -2082,7 +2130,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'soulJunggler': {
 		'gold': False,
 		'qn': 'Juggler',
@@ -2105,7 +2153,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'theBeast': {
 		'gold': False,
 		'qn': 'Beast',
@@ -2128,7 +2176,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'twilightEmissary': {
 		'gold': False,
 		'qn': 'Twilight',
@@ -2155,7 +2203,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'yoHoOgre': {
 		'gold': False,
 		'qn': 'Yo-Ho-Ogre',
@@ -2178,7 +2226,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
 
     # TIER 2
     'arcaneCannon': {
@@ -2203,7 +2251,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'freedealingGambler': {
 		'gold': False,
 		'qn': 'Gambler',
@@ -2222,7 +2270,7 @@ MINIONS = {
 			'target': None,
 			'buff': 3,
 			'trigger': 'sold',
-		},
+			},
 		'n_passive': 0,
 		'deathrattle': False,
 		'shield': False,
@@ -2231,7 +2279,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'glyphGuardian': {
 		'gold': False,
 		'qn': 'Guardian',
@@ -2254,7 +2302,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'harvestGolem': {
 		'gold': False,
 		'qn': 'Golem',
@@ -2277,7 +2325,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'imprisoner': {
 		'gold': False,
 		'qn': 'Imprisoner',
@@ -2300,7 +2348,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'kaboomBot': {
 		'gold': False,
 		'qn': 'Kaboom',
@@ -2323,7 +2371,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'kindlyGrandmother': {
 		'gold': False,
 		'qn': 'Grandmother',
@@ -2346,7 +2394,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'metaltoothLeaper': {
 		'gold': False,
 		'qn': 'Leaper',
@@ -2373,7 +2421,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'murlocWarleader': {
 		'gold': False,
 		'qn': 'Warleader',
@@ -2392,7 +2440,7 @@ MINIONS = {
 			'target': 'murloc',
 			'buff': 2,
 			'trigger': 'present',
-		},
+			},
 		'n_passive': 0,
 		'deathrattle': False,
 		'shield': False,
@@ -2401,7 +2449,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'nathrezimOverseer': {
 		'gold': False,
 		'qn': 'Overseer',
@@ -2447,7 +2495,7 @@ MINIONS = {
 			'target': 'murloc',
 			'buff': 1,
 			'trigger': 'present',
-		},
+			},
 		'n_passive': 0,
 		'deathrattle': False,
 		'shield': False,
@@ -2456,7 +2504,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'pogoHopper': {
 		'gold': False,
 		'qn': 'Pogo',
@@ -2483,7 +2531,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'rabidSaurolisk': {
 		'gold': False,
 		'qn': 'Saurolisk',
@@ -2502,7 +2550,7 @@ MINIONS = {
 			'target': 'deathrattle',
 			'buff': 1,
 			'trigger': 'play',
-		},
+			},
 		'n_passive': 0,
 		'deathrattle': False,
 		'shield': False,
@@ -2511,7 +2559,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'ratPack': {
 		'gold': False,
 		'qn': 'Rat Pack',
@@ -2534,7 +2582,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'southseaCaptain': {
 		'gold': False,
 		'qn': 'Captain',
@@ -2553,7 +2601,7 @@ MINIONS = {
 			'target': 'pirate',
 			'buff': 1,
 			'trigger': 'present',
-		},
+			},
 		'n_passive': 0,
 		'deathrattle': False,
 		'shield': False,
@@ -2562,7 +2610,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'spawnOfNzoth': {
 		'gold': False,
 		'qn': 'Spawn',
@@ -2585,7 +2633,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'stewardOfTime': {
 		'gold': False,
 		'qn': 'Steward',
@@ -2604,7 +2652,7 @@ MINIONS = {
 			'target': None,
 			'buff': 1,
 			'trigger': 'sold',
-		},
+			},
 		'n_passive': 0,
 		'deathrattle': False,
 		'shield': False,
@@ -2613,7 +2661,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'unstableGhoul': {
 		'gold': False,
 		'qn': 'Ghoul',
@@ -2636,7 +2684,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'waxriderTogwaggle': {
 		'gold': False,
 		'qn': 'Towaggle',
@@ -2659,7 +2707,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'zoobot': {
 		'gold': False,
 		'qn': 'Zoobot',
@@ -2672,7 +2720,7 @@ MINIONS = {
 		'img_discovery': './img/discovery_minion2/zoobot.png',
 		'battlecry': {
             'fc': btc_buff_random_minion,
-            'target': ('dragon', 'beast', 'murloc'),
+            'target': {'dragon', 'beast', 'murloc'},
             'buff': 1,
         },
 		'poisonous': False,
@@ -2686,9 +2734,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
-
-
+		},
 	
    # TIER 1
     'alleycat': {
@@ -2717,7 +2763,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'deckSwabbie': {
 		'gold': False,
 		'qn': 'Swabbie',
@@ -2744,7 +2790,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'dragonspawnLieutenant': {
 		'gold': False,
 		'qn': 'Lieutenant',
@@ -2767,7 +2813,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'fiendishServant': {
 		'gold': False,
 		'qn': 'Servant',
@@ -2790,7 +2836,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'mecharoo': {
 		'gold': False,
 		'qn': 'Mecharoo',
@@ -2813,7 +2859,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'microMachine': {
 		'gold': False,
 		'qn': 'Machine',
@@ -2832,7 +2878,7 @@ MINIONS = {
 			'target': None,
 			'buff': 1,
 			'trigger': 'start_turn',
-		},
+			},
 		'n_passive': 0,
 		'deathrattle': False,
 		'shield': False,
@@ -2841,7 +2887,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'murlocTidecaller': {
 		'gold': False,
 		'qn': 'Tidecaller',
@@ -2860,7 +2906,7 @@ MINIONS = {
 			'target': 'murloc',
 			'buff': 1,
 			'trigger': 'play',
-		},
+			},
 		'n_passive': 0,
 		'deathrattle': False,
 		'shield': False,
@@ -2869,7 +2915,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'murlocTidehunter': {
 		'gold': False,
 		'qn': 'Tidehunter',
@@ -2896,7 +2942,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'redWhelp': {
 		'gold': False,
 		'qn': 'Red Whelp',
@@ -2919,7 +2965,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'righteousProtector': {
 		'gold': False,
 		'qn': 'Protector',
@@ -2942,7 +2988,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'rockpoolHunter': {
 		'gold': False,
 		'qn': 'Hunter',
@@ -2969,7 +3015,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'scallyWag': {
 		'gold': False,
 		'qn': 'Scallywag',
@@ -2992,7 +3038,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'scavengingHyena': {
 		'gold': False,
 		'qn': 'Hyena',
@@ -3015,7 +3061,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'selflessHero': {
 		'gold': False,
 		'qn': 'Selfless',
@@ -3038,7 +3084,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'vulgarHomunculus': {
 		'gold': False,
 		'qn': 'Homunculus',
@@ -3065,7 +3111,7 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
     'wrathWeaver': {
 		'gold': False,
 		'qn': 'Wrath',
@@ -3084,7 +3130,7 @@ MINIONS = {
 			'target': 'demon',
 			'buff': 2,
 			'trigger': 'play',
-		},
+			},
 		'n_passive': 0,
 		'deathrattle': False,
 		'shield': False,
@@ -3093,8 +3139,10 @@ MINIONS = {
 		'overkill': False,
 		'cleave': False,
 		'windfury': False,
-	},
+		},
 }
+
+ARCHETYPES = ('dragon', 'beast', 'murloc', 'demon', 'pirate', 'meca')
 
 MINION_BY_ARCHETYPE = {
     'dragon': [name for name in MINIONS if MINIONS[name]['archetype'] == 'dragon'],
@@ -3114,9 +3162,50 @@ MINIONS_BY_TIER = [
     [name for name in MINIONS if MINIONS[name]['lvl'] == 6],
 ]
 
-BUFF_MEGASAUR = {'crackling': 'Shield', 'flaming': '+3attacks', 'spores': 'drt: 2*(1/1)',
-    'poison': 'Poisonous', 'massive': 'Taunt', 'volcanic': '+1/+1',
-    'lightning': 'Windfury', 'carapace': '+3health'}
+# MAYBE ADD FUNCTION TO THIS DICT AND USE ON BTC_MEGASAUR
+BUFF_MEGASAUR = {
+    'crackling': {
+        'text': 'Shield',
+        'img_discovery': './img/discovery_megasaur/crackling.png',
+        },
+    'flaming': {
+        'text': '+3attacks',
+        'img_discovery': './img/discovery_megasaur/flaming.png',
+        },
+    'spores': {
+        'text': 'drt: 2*(1/1)',
+        'img_discovery': './img/discovery_megasaur/spores.png',
+        },
+    'poison': {
+        'text': 'Poisonous',
+        'img_discovery': './img/discovery_megasaur/poison.png',
+        },
+    'massive': {
+        'text': 'Taunt',
+        'img_discovery': './img/discovery_megasaur/massive.png',
+        },
+    'volcanic': {
+        'text': '+1/+1',
+        'img_discovery': './img/discovery_megasaur/volcanic.png',
+        },
+    'lightning': {
+        'text': 'Windfury',
+        'img_discovery': './img/discovery_megasaur/lightning.png',
+        },
+    'carapace': {
+        'text': '+3health',
+        'img_discovery': './img/discovery_megasaur/carapace.png',
+    },
+}
+
+MINIONS_POOL = [
+    {name: {'copy': 16, 'lvl': 1} for name in MINIONS_BY_TIER[0]},
+    {name: {'copy': 15, 'lvl': 2} for name in MINIONS_BY_TIER[1]},
+    {name:{'copy': 13, 'lvl': 3} for name in MINIONS_BY_TIER[2]},
+    {name:{'copy': 11, 'lvl': 4} for name in MINIONS_BY_TIER[3]},
+    {name:{'copy': 9, 'lvl': 5} for name in MINIONS_BY_TIER[4]},
+    {name:{'copy': 7, 'lvl': 6} for name in MINIONS_BY_TIER[5]},
+]
 
 
     

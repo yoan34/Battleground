@@ -3,6 +3,7 @@ The goal of this project is to simulate the Battlegrounds game mode (in the Hear
 Currently my program simulates the servant recruitment part. It also simulates 36/40 possible heroes.
 
 to do: 
+
 -Simulate the combat part between players
 -Learn/create the feature to allow the program to storage/compare its state for practice.
 -(optional) Create a better view of the simulation.

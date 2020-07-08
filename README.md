@@ -5,7 +5,9 @@ Currently my program simulates the servant recruitment part. It also simulates 3
 to do: 
 
 -Simulate the combat part between players
+
 -Learn/create the feature to allow the program to storage/compare its state for practice.
+
 -(optional) Create a better view of the simulation.
 
 this repository shows the code and can be run with the required dependencies listed in the requirements.txt file.

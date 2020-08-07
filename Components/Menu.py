@@ -5,10 +5,18 @@ This class display the menu of the program.
     -Start Bot
 """
 
-import os, time
+import os, time, copy
+from random import choice, sample
+from operator import itemgetter
+
 from Components.Player import Player
+from Components.Pool import Pool
+from Components.Minion import Minion
+from Components.Simulation import Simulation
+
 from constants.position import LEN_SHOP
-from constants.minions import MINIONS_POOL
+from constants.minions import MINIONS_POOL, MINIONS
+from constants.heroes import DATA_HEROES
 
 class Menu:
     def __init__(self):
@@ -23,102 +31,111 @@ class Menu:
         os.system("mode con cols=50 lines=12")
         print(" M E N U ".center(50, '-'))
         print('\n')
-        print("1. Simulation human\n".rjust(35))
-        print("2. Simulation IA\n".rjust(32))
+        print("1. Simulate and see one game.\n".rjust(40))
+        print("2. Simulate many games.\n".rjust(34))
         print("-"*50)
 
-    def simulation(self, is_human):
+    def simulation(self, t):
         """
         Method that simule the game in the shop, for a
         human and IA that perform action randomly.
         """
-        timing = -1 if is_human else self.get_answer_timing_IA()
-        if isinstance(timing, str) and timing.upper() == 'Q':
-            return ''
-        os.system("mode con cols=152 lines=46")
-        pool = MINIONS_POOL.copy()
-        player = Player('IA', pool, is_human=is_human)
-        player.hero = player.get_hero()
-        player.time_by_action = timing/1000
-        player.create_shop(1)
+        os.system("mode con cols=152 lines=51")
+        DATA_MINIONS = {key: {'points': 0, 'lvl': MINIONS[key]['lvl']} for key in MINIONS}
+        simulation = Simulation(DATA_MINIONS, time_action=t)
+        while len(simulation.players) > 1:
+            simulation.play_all_actions_in_a_turn()
+            simulation.matchmaking()
+            simulation.run_all_fights()
+            simulation.next_turn()
+        simulation.view_all_players()
+        print(simulation.players[0])
+        return input('tape to back to the menu.')
+    
+    def many_simulation(self, n):
+        DATA_MINIONS = {key: {'points': 0, 'lvl': MINIONS[key]['lvl']} for key in MINIONS}
+        GAMES = n
+        average_turn = view_percent = 0
+        view = True if GAMES == 1 else False
+        view_shop = True if GAMES == 1 else False
+        a = time.time()
+        for hero in DATA_HEROES:
+            for i in range(8):
+                DATA_HEROES[hero][i+1] = 0
+        
+        errors = 0
+        for i in range(GAMES):
+            simulation = Simulation(DATA_MINIONS)
+            try:
+                while len(simulation.players) > 1:
+                    simulation.play_all_actions_in_a_turn()
+                    simulation.matchmaking()
+                    simulation.run_all_fights()
+                    simulation.next_turn()
+            except Exception:
+                errors += 1
+                continue
+            else:
+                simulation.players_deads.append(simulation.players[0])
+                
+                for pos, player in enumerate(simulation.players_deads):
+                    DATA_HEROES[player.hero.true_name]['count'] += 1
+                    DATA_HEROES[player.hero.true_name]['points'] += pos+1
+                    DATA_HEROES[player.hero.true_name][8-pos] += 1
 
-        player.hero.power['do'](player) if player.hero.power['trigger'] in ('turn', 'now') else None
+            average_turn += simulation.turn
+            print('{}'.format(' '*23) + str(round(i/GAMES*100, 2))+'%\r', end='')
+        b = time.time()
+        os.system("mode con cols=85 lines=56")
+        
+        secondes = int(b-a+1)
+        minutes = secondes //60
+        secondes = secondes - (minutes*60)
+        if minutes:
+            t_game = "time: {}min {}s".format(minutes, secondes)
+        else:
+            t_game = "time: {}s".format(secondes)
+        print('\n')
+        # print('errors:', errors)
+        print('average turn: {:.2f}  ||  {}'.format(average_turn/GAMES, t_game).center(75))
+        print("games by sec: {:.2f}  || games: {}".format(GAMES/(b-a), GAMES).center(75))
+        print('\n')
+        for hero in DATA_HEROES:
+            DATA_HEROES[hero]['average'] = (DATA_HEROES[hero]['points'] / DATA_HEROES[hero]['count']) if DATA_HEROES[hero]['count'] != 0 else 0
 
-        while True:
-            print(player) if player.time_by_action else None
-            action = player.get_action()
-            if action and action[0].upper() == 'Q':
-                break
-            end = player.make(action)
-            if end:
-                break
-        if not is_human:        
-            return input('Enter any touch to come back. [Q] --> quit: ')
-        return ''
+        print(' +--------------+-------+-----+-----+-----+-----+-----+-----+-----+-----+---------+')
+        print(' |{}| games | 1st | 2sd | 3th | 4th | 5th | 6th | 7th | 8th | average |'.format('hero'.center(14)))
+        print(' +--------------+-------+-----+-----+-----+-----+-----+-----+-----+-----+---------+')
 
-    def bot(self):
-        """
-        Method for runs the bot.
-        """
-        os.system("mode con cols=152 lines=46")
-        pool = MINIONS_POOL.copy()
-        bot = Player('IA', pool)
-        bot.is_bot = True
-        bot.start()
-        bot.wait_game_start()
-        bot.hero = bot.bot_chose_a_hero()
-        bot.wait_the_shop()
-        print('Enter in Bob\'s tavern.'.rjust(83), end='\r')
-        time.sleep(4)
-        bot.shop = bot.see_shop(1, 3)
-        print(bot)
-
-        while True:
-
-            while bot.in_shop:
-                print(bot)
-                action = bot.get_action()
-                if action:
-                    bot.make(action)
-                    bot.bot_target_nothing()
-                else:
-                    print('Waiting next turn...')
-                if bot.is_ending_turn():
-                    bot.in_shop = False
-                    time.sleep(17)
-
-            while not bot.in_shop:
-                print('wait shop...'.center(152), end='\r')
-                time.sleep(0.1)
-                if bot.is_in_tavern():
-                    bot.next_turn()
-                    print('In the shop.'.center(152), end='\r')
-                    time.sleep(4.5)
-                    bot.shop = bot.see_shop(bot.lvl, LEN_SHOP[bot.lvl-1])
-                    bot.hero.power['do'](self, add=True) if bot.deathwing else None
+        for hero in sorted(DATA_HEROES, key=lambda x: DATA_HEROES[x]['average'], reverse=True):
+            c_hero = hero.ljust(13)
+            c_1,c_2,c_3,c_4,c_5,c_6,c_7,c_8 = (DATA_HEROES[hero][1],
+                DATA_HEROES[hero][2], DATA_HEROES[hero][3], DATA_HEROES[hero][4], DATA_HEROES[hero][5], DATA_HEROES[hero][6],
+                DATA_HEROES[hero][7], DATA_HEROES[hero][8])
+            if len(str(c_1)) < 3: c_1 = ' '*(3 - len(str(c_1))) + str(c_1)
+            if len(str(c_2)) < 3: c_2 = ' '*(3 - len(str(c_2))) + str(c_2)
+            if len(str(c_3)) < 3: c_3 = ' '*(3 - len(str(c_3))) + str(c_3)
+            if len(str(c_4)) < 3: c_4 = ' '*(3 - len(str(c_4))) + str(c_4)
+            if len(str(c_5)) < 3: c_5 = ' '*(3 - len(str(c_5))) + str(c_5)
+            if len(str(c_6)) < 3: c_6 = ' '*(3 - len(str(c_6))) + str(c_6)
+            if len(str(c_7)) < 3: c_7 = ' '*(3 - len(str(c_7))) + str(c_7)
+            if len(str(c_8)) < 3: c_8 = ' '*(3 - len(str(c_8))) + str(c_8)
+            print(" | {}| {} | {} | {} | {} | {} | {} | {} | {} | {} | {} |".format(c_hero, str(DATA_HEROES[hero]['count']).rjust(5), c_1, c_2, c_3, c_4, c_5, c_6,
+            c_7, c_8, str("{:.2f}".format(DATA_HEROES[hero]['average'])).rjust(7)))
+        
+        print(' +--------------+-------+-----+-----+-----+-----+-----+-----+-----+-----+---------+')
+        print('\n')
+        return input('tape to back to the menu.')
 
     def launch_feature(self, n):
         """ Method that runs the specific feature. """
         if n == 1:
-            answer = self.read_me_human() if not self.n_simulation_human else None
-            if isinstance(answer, str) and answer.upper() == 'Q':
-                return ''
-            self.n_simulation_human += 1
-            return self.simulation(is_human=True)
+            answer = self.get_answer_timing_IA(n)
+            return self.simulation(answer/1000)
         elif n == 2:
-            answer = self.read_me_IA() if not self.n_simulation_IA else None
-            if isinstance(answer, str) and answer.upper() == 'Q':
-                return ''
-            self.n_simulation_IA += 1
-            return self.simulation(is_human=False)
-        elif n == 3:
-            answer = self.read_me_bot() if not self.n_bot else None
-            if isinstance(answer, str) and answer.upper() == 'Q':
-                return ''
-            self.n_bot += 1
-            self.bot()
-            return ''
-
+            answer = self.get_answer_games_IA(n)
+            return self.many_simulation(answer)
+        
 ####### INPUT USER #######
     def get_answer(self):
         """ Gets and manages the user's answer of the menu. """
@@ -139,69 +156,41 @@ class Menu:
                 choice = -1
         return choice
     
-    def get_answer_timing_IA(self):
+    def get_answer_timing_IA(self, n):
         """ Gets and manages the user's answer of the duration by action in IA mode. """
         choice = -1
-        while choice < 10 or choice > 2000:
-            os.system('cls')
-            print('\n')
-            choice = input("Enter a time between each action [10-2000]: ")
+        while choice < 1 or choice > 1000:
+            self.before_start(n)
+            choice = input('Enter number between [1-1000]: '.rjust(39))
             if choice.upper() == 'Q':
                 return choice
             try:
                 choice = int(choice)
-                if choice < 10 or choice > 2000:
-                    print('Enter number between [10-2000].')
-                    time.sleep(0.7)
             except ValueError:
                 choice = -1
-                print('Enter a number.')
-                time.sleep(0.7)
         return choice
-##########################
 
-####### READ ME #######
-    def read_me_human(self):
-        """ Display this when simulation human mode is activate for the first time. """
-        os.system('cls')
-        os.system("mode con cols=135 lines=25")
-        intro = 'You have to type an available action:'
-        buy = 'buy: use for buy a minion with its position in number. (-3gold)'
-        play = 'play: play a minion with two number, the position of the minion in your hand, and the landing position in the board.'
-        swap = 'swap: Change position of minions with two number, the first target and the second one.'
-        refresh = 'refresh: See other minions available. (-1 gold)'
-        sold = 'sold: Sell a minion on the board using one number. (+1 gold)'
-        up = 'up: Upgrade the level of your tavern.'
-        freeze = 'freeze: You\'re next turn doesn\'t change your minions on the tavern.'
-        answer = 'Enter any touch to start. [Q] --> menu: '
-        example = "Example: buy 3  -  play 1 2  -  sold 1  -  swap 2 3  -  refresh  -  up"
-        next = "*** Tape - next - when you finish you turn ***"
-        note = "*** 7 swap max per turn and 2 freeze per turn ***"
-        print("{}\n".format(intro.rjust(len(intro)+10)))
-        for s in (buy, play, swap, refresh, sold, up, freeze):
-            print("{}\n".format(s.rjust(len(s)+15)))
-        print(example.rjust(len(example)+10)+'\n')
-        print(next.rjust(len(next)+10)+'\n')
-        print(note.rjust(len(note)+10)+'\n\n')
-        return input("{}".format(answer.rjust(len(answer)+10)))
+    def get_answer_games_IA(self, n):
+        """ Gets and manages the user's answer of the number of games simulates. """
+        choice = -1
+        while choice < 10 or choice > 10000:
+            self.before_start(n)
+            choice = input('Enter number between [100-10000]: '.rjust(39))
+            if choice.upper() == 'Q':
+                return choice
+            try:
+                choice = int(choice)
+            except ValueError:
+                choice = -1
+        return choice
 
-    def read_me_IA(self):
-        """ Display this when simulation IA mode is activate for the first time. """
+    def before_start(self, n):
+        """" Display the menu """
         os.system('cls')
+        os.system("mode con cols=50 lines=12")
+        print(" M E N U ".center(50, '-'))
         print('\n')
-        intro1, intro2 = "This feature show the program running with one", "logic."
-        intro3 = "He can sold minion only if its board is full."
-        intro4 = "It choose an action randomly until it don't"
-        intro5 = "have any action to do."
-        answer = 'Enter any touch to start. [Q] --> menu: '
-        for s in (intro1, intro2, intro3, intro4, intro5):
-            print(s.rjust(len(s)+3))
-        print('\n\n')
-        return input("{}".format(answer.rjust(len(answer)+3)))
-
-    def read_me_bot(self):
-        """ Display this when Bot mode is activate for the first time. """
-        os.system('cls')
-
-        return input('Enter any touch to start. [Q] --> menu: ')
-######################
+        print("Simulate and see one game.\n".rjust(39)) if n == 1 else print("Simulate many games.\n".rjust(36))
+        print("Choice time by action [1-1000] ms.\n".rjust(43)) if n == 1 else print("Choice the number of games [10-10000].\n".rjust(45))
+        print("-"*50)
+##########################

@@ -24,6 +24,8 @@ Two types of methods in this class:
 
 import time, os
 from random import randint, choice, sample, choices
+from collections import Counter
+from operator import itemgetter
 
 from Components.Minion import Minion
 from Components.Hero import Hero
@@ -31,8 +33,8 @@ from Components.Discovery import Discovery
 
 from constants.minions import MINIONS, ARCHETYPES
 from constants.position import LEN_SHOP
-from constants.heroes import (TIER_LIST, HERO_POWER_ACTIVE_SHOP,
-    HERO_POWER_ACTIVE_BOARD, HERO_POWER_ACTIVE_ONLY)
+from constants.heroes import (LIST_HEROES, HERO_POWER_ACTIVE_SHOP,
+    HERO_POWER_ACTIVE_BOARD, HERO_POWER_ACTIVE_ONLY, HEROES)
 
 ## TRY FACTORISE CODE WHEN SEE IF WE HAVE 3 SAME CARDS AND EDIT STATE DOUBLE
 
@@ -52,11 +54,16 @@ class Game:
         self.shop = []
         self.hand = []
         self.board = []
+        self.last_players = []
+        self.last_enemies = []
+        self.first_enemy_kill = ''
         self.double = {}
 
         self.triple = 0
         self.m_gold = 0
         self.board_gold_minion = 0
+        self.finish = 0
+        self.type_board = ''
 
         self.max_freeze = 2
         self.max_swap = 3
@@ -75,19 +82,28 @@ class Game:
 
 
         # rely to minion
+        self.n_murozon = 0
         self.n_pogo = 0
         self.pirate_buy_in_turn = 0
         self.n_pirate = 0
         self.oldmurloc = 0
         self.hoggarr = 0
         self.zerus = 0
+        self.zerus_buy = 0
         self.watcher = 0
         self.brann = 1
         self.n_brann = 0
+
         self.n_khadgar = 0
+        self.n_khadgar_fight = 0
         self.n_g_khadgar = 0
+        self.n_g_khadgar_fight = 0
+        self.baron = 1
+        self.baron_fight = 1
         
         # about actions
+        self.kt = False
+        self.can_play_action = True
         self.n_action = 0
         self.n_buy = 0
         self.buy_in_turn = 0
@@ -100,17 +116,24 @@ class Game:
         self.n_up = 0
         self.n_freeze = 0
         self.first_refresh = True
-    
+        self.in_simulation = False
         self.do_action = 0
+
+        #JUST DEBUG
+        self.n_eudora = 0
+        self.n_patches = 0
+        self.n_reno = 0
+        self.solo = False
         self.history = []
+
 
     def get_all_actions(self):
         actions = []
-        # if self.max_freeze != 0:
-        #     actions.append('freeze')
+        if self.max_freeze != 0:
+            actions.append('freeze')
         if len(self.up_cost) > 1 and self.gold >= self.up_cost[0]:
             actions.append('up')
-        if self.gold >= self.minion_cost and len(self.shop):
+        if self.gold >= self.minion_cost and (len(self.shop) > len(self.hero.maiev)):
             actions.append('buy')
         if self.gold >= self.refresh_max_cost and self.gold % 3 != 0:
             actions.append('refresh')
@@ -118,39 +141,44 @@ class Game:
             actions.append('sold')
         elif not self.is_human and len(self.board) > 6:
             actions.append('sold')
-        # if len(self.board) > 1 and self.max_swap != 0:
-        #     actions.append('swap')
+        if len(self.board) > 1 and self.max_swap != 0:
+            actions.append('swap')
         if len(self.hand):
             if self.hero.name == 'Elise':
                 for card in self.hand:
                     if isinstance(card, Minion) and len(self.board) < 7:
                         actions.append('play')
                         break
-                    elif not isinstance(card, Minion) and self.gold >= card.cost:
+                    elif not isinstance(card, Minion) and not isinstance(card, str) and self.gold >= card.cost:
                         actions.append('play')
                         break
             elif len(self.board) < 7:
-                actions.append('play')
-        if self.hero.power['active'] and self.hero.can_power:
+                if len(self.board) == 0:
+                    for minion in self.hand:
+                        if (isinstance(minion, Minion) or isinstance(minion, Discovery)):
+                            actions.append('play')
+                            break
+                else:
+                    actions.append('play')
+        if self.hero.power['active'] and self.hero.can_power and self.gold >= self.hero.power['cost']:
             if self.hero.name in HERO_POWER_ACTIVE_SHOP and self.shop:
                 actions.append('power')
             elif self.hero.name in HERO_POWER_ACTIVE_BOARD and self.board:
                 actions.append('power')
             elif self.hero.name in HERO_POWER_ACTIVE_ONLY:
                 actions.append('power')
-                    
+        self.can_play_action = True if actions else False
         return actions
 
-    def get_hero(self):
+    def get_hero(self, archetype):
         """ Get an hero in Human mode, IA and bot """
+        all_heroes = HEROES[archetype]
         if self.is_bot:
-            return self.bot_chose_a_hero()
-        heroes = sample(TIER_LIST.keys(), 4)
-        while 'Illidan' in heroes or 'Rafaam' in heroes or 'Nefarian' in heroes or 'Finley' in heroes or 'Akazamzarak' in heroes:
-            heroes = sample(TIER_LIST.keys(), 4)
+            return self.bot_chose_a_hero(archetype)
+        heroes = sample(all_heroes, 4)
         
         if self.is_human:
-            answer = self.get_answer_hero(heroes)
+            answer = self.get_answer_hero(heroes, 4)
             
             hero = heroes[answer-1]
         else:
@@ -158,27 +186,26 @@ class Game:
             hero = choice(heroes)
         return self.create_hero(hero)
 
-
-
-########### CREATE CUSTOM STUFF ###########
+    ########### CREATE CUSTOM STUFF ###########
     def create_shop(self, lvl):
         """
         Create minions in the shop.Depend on the player's level.
         """
-        if not self.is_human and self.time_by_action == 0:
-            [self.add_to_pool(name, lvl) for name, lvl in self.shop]
+        if self.time_by_action == 0:
+            # here
+            [self.pool.add_to_pool(name, lvl) for name, lvl, buff in self.shop[len(self.hero.maiev):]]
             self.shop.clear()
         
-            minions = self.get_minions_pool(lvl)
-            [self.remove_to_pool(name, lvl) for name, lvl in minions]
+            minions = self.pool.get_minions_pool(lvl, self.hero.aranna, self.shop, len(self.hero.maiev))
+            [self.pool.remove_to_pool(name, lvl) for name, lvl, buff in minions]
             self.shop.extend(minions)
         else:
             
-            [self.add_to_pool(minion.name, minion.lvl) for minion in self.shop]
+            [self.pool.add_to_pool(minion.name, minion.lvl) for minion in self.shop[len(self.hero.maiev):]]
             self.shop.clear()
-            minions = self.get_minions_pool(lvl)
-            [self.remove_to_pool(name, lvl) for name, lvl in minions]
-            for name, pos in minions:
+            minions = self.pool.get_minions_pool(lvl, self.hero.aranna, self.shop,  len(self.hero.maiev))
+            [self.pool.remove_to_pool(name, lvl) for name, lvl, buff in minions]
+            for name, pos, buff in minions:
                 self.shop.append(self.create_minion(False, name))
 
 
@@ -190,34 +217,28 @@ class Game:
         When the shop is freeze. The next turn keep the already minions
         and add minions if the shop is not fulfill.
         """
-        if not self.is_human and self.time_by_action == 0:
-            minions = self.get_minions_pool(lvl)
-            [self.remove_to_pool(name, lvl) for name, lvl in minions]
+        if self.time_by_action == 0:
+            minions = self.pool.get_minions_pool(lvl, self.hero.aranna, self.shop, len(self.hero.maiev))
+            [self.pool.remove_to_pool(name, lvl) for name, lvl, buff in minions]
             self.shop.extend(minions)
 
         else:
-            minions = self.get_minions_pool(lvl)
-            [self.remove_to_pool(name, lvl) for name, lvl in minions]
-            for name, pos in minions:
+            minions = self.pool.get_minions_pool(lvl, self.hero.aranna, self.shop,  len(self.hero.maiev))
+            [self.pool.remove_to_pool(name, lvl) for name, lvl, buff in minions]
+            for name, pos, buff in minions:
                 minion = self.create_minion(False, name)
                 self.hero.power['do'](self, minion=minion, add=True) if self.hero.deathwing else None
                 self.hero.power['do'](self) if self.hero.millificent else None
                 self.shop.append(minion)
 
-        # for i in range(length_shop - len(self.shop)):
-        #     minion = choice(minions)
-        #     minion = Minion(minion, *[value for value in MINIONS[minion].values()])
-        #     self.hero.power['do'](self, minion=minion, add=True) if self.hero.deathwing else None
-        #     self.hero.power['do'](self) if self.hero.millificent else None
-        #     self.shop.append(minion)
-
-    def create_minions(self, length, gold=False, *names):
+    def create_minions(self, *names, length=0, gold=False, tier_min=1, tier_max=6):
         """
         Return a couple of minions. Can be Gold (simulate a triple minion),
         can enter a length and create  minions randomly, or write some
         names and create these minions.
         """
-        minions, team = [minion for minion in MINIONS], []
+        
+        minions, team = [minion for minion in MINIONS if (MINIONS[minion]['lvl'] >= tier_min and MINIONS[minion]['lvl'] <= tier_max)], []
         for i in range(length):
             minion = choice(minions)
             team.append(Minion(minion, gold, *[value for value in MINIONS[minion].values()][1:]))
@@ -229,14 +250,14 @@ class Game:
         """
         Return a specific minion. Enter if it's a golden minion and its name.
         """
-        if name[-2:] == '_t':
+        if name[-2:].upper() == '_T':
             archetype = 'beast' if name[:-2] == 'alleycat' else 'murloc'
-            return Minion(name, gold, name, 1, 1, 1, archetype)
+            return Minion(name, gold, name, 1, 1, 1, archetype, deathrattle=[], fight={'do': [], 'trigger': ''})
         return Minion(name,gold, *[value for value in MINIONS[name].values()][1:])
         
     def create_hero(self, name):
         """ Create a specific hero by its name. """
-        return Hero(name, *[value for value in TIER_LIST[name].values()])
+        return Hero(name, *[value for value in LIST_HEROES[name].values()])
 ############################################
 
 
@@ -268,27 +289,27 @@ class Game:
                 if self.gold >= self.refresh_cost:
                     good_choice = True
                 else:
-                    print('Not enough gold.')
-                    time.sleep(0.7)
+                    print('Not enough gold.') if not self.in_simulation else None
+                    time.sleep(0.7) if not self.in_simulation else None
 
             elif len(action) == 1 and action[0] == 'freeze':
                 if self.max_freeze > 0:
                     good_choice = True
                 else:
-                    print('Maximum freeze reach this turn...')
-                    time.sleep(0.7)
+                    print('Maximum freeze reach this turn...') if not self.in_simulation else None
+                    time.sleep(0.7) if not self.in_simulation else None
 
             elif len(action) == 1 and action[0] == 'up':
                 if self.up_cost[0] != 'M':
                     if self.gold >= self.up_cost[0]:
                         good_choice = True
                     else:
-                        print('Not enough gold for upgrade.')
+                        print('Not enough gold for upgrade.') if not self.in_simulation else None
 
-                        time.sleep(0.7)
+                        time.sleep(0.7) if not self.in_simulation else None
                 else:
-                    print('Level tavern max.')
-                    time.sleep(0.7)
+                    print('Level tavern max.') if not self.in_simulation else None
+                    time.sleep(0.7) if not self.in_simulation else None
 
             elif len(action) == 2 and action[0] == 'buy':
                 try:
@@ -297,18 +318,18 @@ class Game:
                     action[1] = -1
                 if action[1] > 0 and action[1] <= len(self.shop):
                     if self.gold >= self.minion_cost:
-                        if self.shop[action[1]-1].maiev:
-                            print('Cant buy minion prisoned.')
-                            time.sleep(0.7)
+                        if self.time_by_action != 0 and (action[1] in [i+1 for i in range(len(self.hero.maiev))]):
+                            print('Cant buy minion prisoned.') if not self.in_simulation else None
+                            time.sleep(0.7) if not self.in_simulation else None
                         else:
                             action.append(len(self.shop))
                             good_choice = True
                     else:
-                        print('Not enough gold.')
-                        time.sleep(0.7)
+                        print('Not enough gold.') if not self.in_simulation else None
+                        time.sleep(0.7) if not self.in_simulation else None
                 else:
-                    print('Position minion out of range. (buy)')
-                    time.sleep(0.7)
+                    print('Position minion out of range. (buy)') if not self.in_simulation else None
+                    time.sleep(0.7) if not self.in_simulation else None
 
             elif len(action) == 2 and action[0] == 'sold':
                 try:
@@ -319,8 +340,8 @@ class Game:
                     action.append(len(self.board))
                     good_choice = True
                 else:
-                    print('position minion out of range. (sold)')
-                    time.sleep(0.7)
+                    print('position minion out of range. (sold)') if not self.in_simulation else None
+                    time.sleep(0.7) if not self.in_simulation else None
 
             elif len(action) == 3 and action[0] == 'swap':
                 try:
@@ -335,11 +356,11 @@ class Game:
                         action.append(len(self.board))
                         good_choice = True
                     else:
-                        print('Maximum swap reach this turn...')
-                        time.sleep(0.7)
+                        print('Maximum swap reach this turn...') if not self.in_simulation else None
+                        time.sleep(0.7) if not self.in_simulation else None
                 else:
-                    print('position minions out of range. (swap)')
-                    time.sleep(0.7)
+                    print('position minions out of range. (swap)') if not self.in_simulation else None
+                    time.sleep(0.7) if not self.in_simulation else None
             
             elif len(action) == 3 and action[0] == 'play':
                 try:
@@ -354,25 +375,28 @@ class Game:
                     action.append(len(self.board))
                     good_choice = True
                 else:
-                    print('position minions out of range. (play)')
-                    time.sleep(0.7)
+                    print('position minions out of range. (play)') if not self.in_simulation else None
+                    time.sleep(0.7) if not self.in_simulation else None
             elif action[0].upper() == 'Q':
                 break
             elif len(action) == 1 and action[0] == 'next':
                 return action
             
+            elif len(action) == 1 and action[0] == 'finish':
+                return action
+            
             elif action[0] == 'power' and self.hero.can_power:
                 if not self.hero.power['active']:
-                    print('Hero power passive.')
-                    time.sleep(0.7)
+                    print('Hero power passive.') if not self.in_simulation else None
+                    time.sleep(0.7) if not self.in_simulation else None
                 else:
                     if self.gold >= self.hero.power['cost']:
                         if len(action) == 1:
                             if self.hero.name in HERO_POWER_ACTIVE_ONLY:
                                 return action
                             else:
-                                print('Hero power take arguments.')
-                                time.sleep(0.7)
+                                print('Hero power take arguments.') if not self.in_simulation else None
+                                time.sleep(0.7) if not self.in_simulation else None
 
                         elif len(action) == 2:
                             try:
@@ -383,21 +407,21 @@ class Game:
                                 if action[1] > 0 and action[1] <= len(self.board):
                                     return action
                                 else:
-                                    print('Wrong position target.')
-                                    time.sleep(0.7)
+                                    print('Wrong position target.') if not self.in_simulation else None
+                                    time.sleep(0.7) if not self.in_simulation else None
                             elif self.hero.name in HERO_POWER_ACTIVE_SHOP:
                                 if self.hero.name == 'Maiev':
                                     no_power = len(self.hero.maiev)
                                     if action[1] in [i+1 for i in range(no_power)]:
-                                        print('Can\'t hero power minion already prisoned.')
-                                        time.sleep(0.7)
+                                        print('Can\'t hero power minion already prisoned.') if not self.in_simulation else None
+                                        time.sleep(0.7) if not self.in_simulation else None
                                     else:
                                         return action
                                 elif action[1] > 0 and action[1] <= len(self.shop):
                                     return action
                                 else:
-                                    print('Wrong position target.')
-                                    time.sleep(0.7)
+                                    print('Wrong position target.') if not self.in_simulation else None
+                                    time.sleep(0.7) if not self.in_simulation else None
 
                         elif len(action) == 3 and self.hero.name == 'Malygos':
                             if action[1] in ('shop', 'board'):
@@ -409,33 +433,33 @@ class Game:
                                     if action[2] > 0 and action[2] <= len(self.shop):
                                         return action
                                     else:
-                                        print('Wrong position.')
-                                        time.sleep(0.7)
+                                        print('Wrong position.') if not self.in_simulation else None
+                                        time.sleep(0.7) if not self.in_simulation else None
                                 elif action[1] == 'board':
                                     if action[2] > 0 and action[2] <= len(self.board):
                                         return action
                                     else:
-                                        print('Wrong position')
-                                        time.sleep(0.7)
+                                        print('Wrong position') if not self.in_simulation else None
+                                        time.sleep(0.7) if not self.in_simulation else None
                             else:
-                                print('Hero don\'t take arguments.')
-                                time.sleep(0.7)
+                                print('Hero don\'t take arguments.') if not self.in_simulation else None
+                                time.sleep(0.7) if not self.in_simulation else None
                         else:
-                            print('Wrong arguments.')
-                            time.sleep(0.7)
+                            print('Wrong arguments.') if not self.in_simulation else None
+                            time.sleep(0.7) if not self.in_simulation else None
                     else:
-                        print('Not enough gold for hero power.')
-                        time.sleep(0.7)
+                        print('Not enough gold for hero power.') if not self.in_simulation else None
+                        time.sleep(0.7) if not self.in_simulation else None
             elif action[0] == 'power' and not self.hero.can_power:
-                print('Hero power already used.')
-                time.sleep(0.7)
+                print('Hero power already used.') if not self.in_simulation else None
+                time.sleep(0.7) if not self.in_simulation else None
 
             elif action[0] == 'pool':
-                print(self.pool[int(action[1])-1][self.hand[int(action[2])-1].name])
+                print(self.pool.pool[int(action[1])-1][self.hand[int(action[2])-1].name])
                 time.sleep(1.5)    
             else:
-                print('Action doesn\'t exist.')
-                time.sleep(0.7)
+                print('Action doesn\'t exist.') if not self.in_simulation else None
+                time.sleep(0.7) if not self.in_simulation else None
         return action
 
     def get_answer_discovery(self):
@@ -484,10 +508,10 @@ class Game:
                     time.sleep(0.7)
         return answer - 1
 
-    def get_answer_hero(self, heroes):
+    def get_answer_hero(self, heroes, n):
         """ Gets and manages the answer when heroes are present """
         answer = -1
-        while answer < 1 or answer > 4:
+        while answer < 1 or answer > n:
             os.system('cls')
             self.display_heroes(heroes)
             answer = input('choice hero: '.rjust(82))
@@ -499,11 +523,28 @@ class Game:
                 time.sleep(0.7)
         return answer
 
+    def get_answer_mukla(self):
+        answer = -1
+        targets = [i+1 for i in range(len(self.board))]
+        while answer < 1 or answer > len(self.board):
+            print(self)
+            answer = input('choice minion buff with banana ({}): '.format(', '.join(map(str, targets))))
+            try:
+                answer = int(answer)
+            except ValueError:
+                print('Incorrect answer.')
+                answer = -1
+                time.sleep(0.7) 
+            else:
+                if answer not in targets:
+                    print('Have to be in ({}).'.format(', '.join(map(str, targets))))
+                    time.sleep(0.7)
+        return answer - 1
 ###########################################
 
   
 ########### MANAGE PASSIVE MINION ###########
-    def execute_passive_play(self, minion_play):
+    def execute_passive_play(self, minion_play, team, fight=False):
         """
         Triggers all minions passives when a minion is play on the board.
         Manage some specific case like:
@@ -513,20 +554,31 @@ class Game:
             -minion: khadgar
             -minion: shifterZerus
         """
-        if minion_play.name == 'floatingWatcher':
-            self.watcher += 1
-        elif minion_play.name == 'capnHoggarr':
-            self.hoggarr += 1
-        elif minion_play.name == 'brannBronzebeard':
-            self.n_brann += 1
-            self.brann = 3 if minion_play.gold else 2
-        elif minion_play.name == 'khadgar':
-            if minion_play.gold:
-                self.n_g_khadgar += 1
-            else:
-                self.n_khadgar += 1
+        if not fight:
+            if minion_play.name == 'floatingWatcher':
+                self.watcher += 1
+            elif minion_play.name == 'capnHoggarr':
+                self.hoggarr += 1
+            elif minion_play.name == 'brannBronzebeard':
+                self.n_brann += 1
+                self.brann = 3 if minion_play.gold else 2
+            elif minion_play.name == 'khadgar':
+                if minion_play.gold:
+                    self.n_g_khadgar += 1
+                else:
+                    self.n_khadgar += 1
+            if self.zerus:
+                for pos, minion in enumerate(team):
+                    if minion.qn[-1] == 'Z':
+                        self.zerus -= 1
+                        minion.name = minion.true_name
+                        new_minion = Minion(minion.name, minion.gold, *[value for value in MINIONS[minion.true_name].values()][1:])
+                        minion_play = new_minion
+                        team[pos] = new_minion
+                        if not minion.gold:
+                            self.update_doublon_minion(minion)
 
-        for minion in self.board:
+        for minion in team:
             if minion.passive:
                 if minion.passive['trigger'] == 'play':
                     fc, target, buff = list(minion.passive.values())[:-1]
@@ -537,19 +589,6 @@ class Game:
                 elif minion.passive['trigger'] == 'present':
                     fc, target, buff = list(minion.passive.values())[:-1]
                     fc(self, minion, minion_play, target, buff, 'play')
-        if self.zerus:
-            for pos, minion in enumerate(self.board):
-                if minion.qn[-1] == 'Z':
-                    self.zerus -= 1
-                    self.board[pos] = Minion(minion.true_name, minion.gold, *[value for value in MINIONS[minion.true_name].values()][1:])
-                    if minion.true_name in self.double:
-                        if self.double[minion.true_name] == 2:
-                            self.triple_minion(minion, False)
-                            self.double.pop(minion.true_name)
-                        else:
-                            self.double[minion.true_name] += 1
-                    else:
-                            self.double[minion.true_name] = 1
                     
     def execute_passive_sold(self, minion):
         """
@@ -622,38 +661,11 @@ class Game:
 
         elif minion_buy.name == 'shifterZerus':
             self.zerus += 1
+
+    
+
 #############################################
 
-    ####### MANAGE MINION POOL ########
-    def add_to_pool(self, name, tier, gold=False):
-        if name != 'amalgame':
-            n = 3 if gold else 1
-            for _ in range(n):
-                self.pool[tier-1][name]['copy'] += 1
-
-    def remove_to_pool(self, name, tier):
-        if self.pool[tier-1][name]['copy'] > 0:
-            self.pool[tier-1][name]['copy'] -= 1
-
-    def is_in_pool(self, name, tier):
-        if name in self.pool[tier-1]:
-            return True
-        return False
-
-    def display_pool(self, lvl=6):
-        for minions in self.pool[:lvl]:
-            for name in minions:
-                print("{}: {}".format(name, minions[name]))
-
-    def get_minions_pool(self, lvl):
-        minions_names, minions_values = [], []
-        length_shop = 7 if self.hero.aranna else LEN_SHOP[lvl-1]
-        for minions_pool in self.pool[:lvl]:
-            minions_names.extend(minions_pool)
-            minions_values.extend(minions_pool.values())
-        levels = [d['lvl'] for d in minions_values]
-        weights = [d['copy'] for d in minions_values]
-        return choices(list(zip(minions_names, levels)), weights=weights ,k=length_shop-len(self.shop))
 
 ########## OTHER ############
     def next_turn(self):
@@ -663,7 +675,7 @@ class Game:
         and not scans by the bot.
         """
         # We have to decompose this feature into two feature when we implemente fight
-        self.execute_passive_turn('end_turn')
+        self.execute_passive_turn('end_turn') if self.solo else None
         self.in_shop = True
         if not self.hero.can_power:
             if self.hero.lichking in self.board:
@@ -682,6 +694,7 @@ class Game:
             self.up_cost[0]-= 1 if self.up_cost[0] > 0 else 0
         self.gold = 2 + self.turn if self.turn < 9 else 10
 
+        self.hero.power['do'](self) if self.hero.name == 'Maiev' else None
         #MAYBE ADD FUNCTION FOR CALL FC DEATHWING AND MILLIFICIENT
         if self.is_freeze:
             if not self.is_bot:
@@ -699,7 +712,6 @@ class Game:
 
         self.execute_passive_turn('start_turn')
         self.hero.power['do'](self) if self.hero.power['trigger'] == 'turn' and self.hero.name != 'Sindragosa' else None
-        self.hero.power['do'](self) if self.hero.name == 'Maiev' else None
         self.is_freeze = False
 
     def get_board_archetype(self):
@@ -710,7 +722,27 @@ class Game:
                 archetypes.append(minion.archetype)
         return archetypes
 
-    def board_position_of(self, target='all', minion=False):
+    def get_type_of_board(self):
+        archetypes = [m.archetype for m in self.board]
+        archetypes = Counter(archetypes)
+        if archetypes:
+            archetype, value = max(archetypes.items(), key=itemgetter(1))
+            self.type_board = 'mixed' if list(archetypes.values()).count(value) > 1 else archetype
+            self.type_board = 'mixed' if self.type_board == 'neutral' else self.type_board
+        
+    def define_type_for_all(self, minions, all_types, base_types=ARCHETYPES):
+        if len(base_types) < 3:
+            type_res = list(set(ARCHETYPES) - set(base_types))
+        else:
+            type_res = list(set(base_types) - set(all_types))
+        for minion in minions:
+            if type_res:
+                minion.archetype = choice(type_res)
+                type_res = list(set(type_res)-set(minion.archetype))
+            else:
+                minion.archetype = choice(base_types)
+
+    def board_position_of(self, team=[], target='all', minion=False):
         """
         Return all positions of a minions that match a specific value.
         Example: we want to know the positions of all murloc in the board.
@@ -719,49 +751,75 @@ class Game:
         """
         if target in ARCHETYPES:
             all_target = []
-            for pos, m in enumerate(self.board):
+            for pos, m in enumerate(team):
                 if m.archetype == target or m.archetype == 'all':
                     all_target.append(pos+1)
             
         elif target in ('taunt', 'shield', 'windufry', 'poisonous', 'reborn'):
-            all_target = [pos+1 for (pos, m) in enumerate(self.board) if m.__dict__[target]]
+            all_target = [pos+1 for (pos, m) in enumerate(team) if m.__dict__[target]]
         else:
-            all_target = [pos+1 for pos in range(len(self.board))]
+            all_target = [pos+1 for pos in range(len(team))]
         if minion:
-            minion_index = [pos+1 for pos, m in enumerate(self.board) if m.id == minion.id][0]
+            minion_index = [pos+1 for pos, m in enumerate(team) if m.id == minion.id][0]
             if minion_index in all_target:
                 all_target.remove(minion_index)
         return all_target
         
-    def triple_minion(self, minion_to_triple, is_token):
+    def update_doublon_minion(self, minion, token=False):
+        if minion.name in self.double:
+            if self.double[minion.name] == 2:
+                self.triple_minion(minion, is_token=token)
+                self.double.pop(minion.name)
+            else:
+                self.double[minion.name] += 1
+        else:
+            self.double[minion.name] = 1
+
+    def triple_minion(self, minion_to_triple, is_token=False):
         """
         Manages a merges of three minions and add the new golden minion in
         the hand.
         """
         minions = []
         board_name = [minion.name if not minion.gold else '' for minion in self.board]
-        hand_name = [minion.name if isinstance(minion, Minion) and not minion.gold else '' for minion in self.hand]
+        hand_name = [minion.name if (isinstance(minion, Minion) and not minion.gold and 'true_name' not in minion.__dict__) else '' for minion in self.hand]
         if minion_to_triple.name == 'khadgar':
             self.n_khadgar = 0
         if minion_to_triple.name == 'shifterZerus':
             self.zerus -= 2
+
         while minion_to_triple.name in board_name:
             minion = self.board.pop(board_name.index(minion_to_triple.name))
-            self.hero.power['do'](self, minion=minion, add=False) if self.hero.deathwing else None
+            minion.atk -= 2 if self.hero.deathwing else 0
             minions.append(minion)
             board_name.remove(minion_to_triple.name)
         while minion_to_triple.name in hand_name:
             minions.append(self.hand.pop(hand_name.index(minion_to_triple.name)))
             hand_name.remove(minion_to_triple.name)
         if not is_token:
-            
-            minion_gold = Minion(minions[0].name, True, *[value for value in MINIONS[minions[0].name].values()][1:])
-            minion_gold.atk = minions[0].atk + minions[1].atk + minion_to_triple.atk - MINIONS[minions[0].name]['atk']
-            minion_gold.hp = minions[0].hp + minions[1].hp + minion_to_triple.hp - MINIONS[minions[0].name]['hp']
+            if minions[0].name == 'amalgame':
+                minion_gold = Minion('amalgame', True, 'amalgame', 1, 1, 1, 'all',deathrattle=[], fight={'do': [], 'trigger': ''})
+            else:
+                minion_gold = Minion(minions[0].name, True, *[value for value in MINIONS[minions[0].name].values()][1:])
+                minion_gold.atk = minions[0].atk + minions[1].atk + minion_to_triple.atk - MINIONS[minions[0].name]['atk']
+                minion_gold.hp = minions[0].hp + minions[1].hp + minion_to_triple.hp - MINIONS[minions[0].name]['hp']
+                minion_gold.taunt = True if (minions[0].taunt or minions[1].taunt) else False
+                minion_gold.poisonous = True if (minions[0].poisonous or minions[1].poisonous) else False
+                minion_gold.shield = True if (minions[0].shield or minions[1].shield) else False
+                minion_gold.windfury = True if (minions[0].windfury or minions[1].windfury) else False
+                minion_gold.minions_magnetic = minions[0].minions_magnetic + minions[1].minions_magnetic
+                minion_gold.deathrattle = minions[0].deathrattle if (len(minions[0].deathrattle) >  len(minions[1].deathrattle)) else minions[1].deathrattle
+                minion_gold.play_deathrattle = minion_gold._play_deathrattle if minion_gold.deathrattle else None
         else:
             minion_gold = Minion(minions[0].qn, True, minions[0].qn, 1, 1, 1, minions[0].archetype)
             minion_gold.atk = minions[0].atk + minions[1].atk + minion_to_triple.atk - 1
             minion_gold.hp = minions[0].hp + minions[1].hp + minion_to_triple.hp - 1
+            minion_gold.taunt = True if (minions[0].taunt or minions[1].taunt) else False
+            minion_gold.poisonous = True if (minions[0].poisonous or minions[1].poisonous) else False
+            minion_gold.shield = True if (minions[0].shield or minions[1].shield) else False
+            
+            minion_gold.deathrattle = minions[0].deathrattle if (len(minions[0].deathrattle) >  len(minions[1].deathrattle)) else minions[1].deathrattle
+            minion_gold.play_deathrattle = minion_gold._play_deathrattle if minion_gold.deathrattle else None
         
         self.board_gold_minion += 1
         self.triple += 1
@@ -770,7 +828,21 @@ class Game:
     
     def get_discovery(self, tier=False, minion=False, hero=False, pool=False, cost=0):
         """ Create a discover's card and return it. """
-        return Discovery(tier, minion, hero, cost)
+        return Discovery(tier, minion, hero, pool, cost)
 
+    def get_minion_enemies(self, gold, minion):
+        if minion.name[-2:].upper() == '_T':
+            atk, hp = minion.max_atk, minion.max_hp
+            return Minion(minion.name, gold, minion.name, atk, hp, 1,
+                minion.archetype, taunt=minion.taunt, deathrattle=minion.deathrattle, fight=minion.fight,
+                max_hp=minion.max_hp, max_atk=minion.max_atk)
+        elif minion.name.lower() == 'amalgame':
+            return Minion('amalgame', gold, 'amalgame', 1, 1, 1, 'all',deathrattle=[], fight={'do': [], 'trigger': ''})
+        elif minion.name.lower() == 'treasure':
+            treasure = Minion('treasure', gold, 'treasure', 0, 2, 1, 'neutral', deathrattle=minion.deathrattle, fight={'do': [], 'trigger': ''})
+            treasure.hp = 2
+            return treasure
+        else:
+            return self.create_minion(gold, minion.name)
 
 

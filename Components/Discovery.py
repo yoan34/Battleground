@@ -7,7 +7,7 @@ It manage:
     -Play a minion 'primalfinLookout' and discover a specific 'murloc' minion.
     -Play a minion 'megasaur' and discover a specific buff on murloc.
 """
-from random import choice
+from random import choice, choices
 
 from Components.Minion import Minion
 from constants.minions import MINIONS, MINIONS_BY_TIER, MINION_BY_ARCHETYPE, BUFF_MEGASAUR
@@ -30,33 +30,68 @@ class Discovery:
         Gets the correct names of minions or buffs (depends on the specific nature of the discover)
         and choice three randomly name and returns them.
         """
-        select = []
+        
         if self.minion and self.minion.name == 'primalfinLookout':
-            minions =  MINION_BY_ARCHETYPE[self.minion.archetype].copy()
-            
-            minions.remove('primalfinLookout')
+            names, copies, levels = self.select('murloc')
+            if 'primalfinLookout' in names:
+                ind = names.index('primalfinLookout')
+                names.pop(ind)
+                copies.pop(ind)
+                levels.pop(ind)
+            minions = choices(list(zip(names, levels)), weights=copies, k=3)
+            while len(set(minions)) != 3:
+                minions = choices(list(zip(names, levels)), weights=copies, k=3)
+            return [name for name, pos in minions]
 
         elif self.minion and self.minion.name == 'gentleMegasaur':
             minions = list(BUFF_MEGASAUR.keys()).copy()
-            self.megasaur = True
-        elif self.hero and self.hero == 'Alexstrasza':
-            minions = MINION_BY_ARCHETYPE['dragon'].copy()
-        else:
-            minions = MINIONS_BY_TIER[self.tier].copy()
-        for _ in range(3):
-            minion = choice(minions)
-            minions.remove(minion)
-            select.append(minion)
-        return select
+            self.megasaur, select = True, []
+            for _ in range(3):
+                minion = choice(minions)
+                minions.remove(minion)
+                select.append(minion)
+            return select
 
+        elif self.hero and self.hero == 'Alexstrasza':
+            names, copies, levels = self.select('dragon')
+            minions = choices(list(zip(names, levels)), weights=copies, k=3)
+            while len(set(minions)) != 3:
+                minions = choices(list(zip(names, levels)), weights=copies, k=3)
+            return [name for name, pos in minions]
+        
+        elif self.hero and self.hero == 'Hooktusk':
+            names, copies, levels = self.select(self.minion.lvl-1)
+            if self.minion.name in names:
+                ind = names.index(self.minion.name)
+                names.pop(ind)
+                copies.pop(ind)
+                levels.pop(ind)
+            minions = choices(list(zip(names, levels)), weights=copies, k=3)
+            while len(set(minions)) != 3:
+                minions = choices(list(zip(names, levels)), weights=copies, k=3)
+            return [name for name, pos in minions]
+
+        else:
+            names, copies, levels = self.select(self.tier)
+            minions = choices(list(zip(names, levels)), weights=copies, k=3)
+            while len(set(minions)) != 3:
+                minions = choices(list(zip(names, levels)), weights=copies, k=3)
+            return [name for name, pos in minions]
+        
     def select(self, target):
         if isinstance(target, int):
-            minions = self.pool[target-1]
-            minions_names = minions.keys()
-            minions_values = minions.values()
+            names = [name for name in self.pool[target]]
+            copies = [self.pool[target][name]['copy'] for name in self.pool[target]]
+            levels = [self.pool[target][name]['lvl'] for name in self.pool[target]]
+            return names, copies, levels
 
         elif isinstance(target, str):
-            pass
+            names, copies, levels = [], [], []
+            for minions in self.pool:
+                names += [name for name in minions if minions[name]['archetype'] == target]
+                copies += [minions[name]['copy'] for name in minions if minions[name]['archetype'] == target]
+                levels += [minions[name]['lvl'] for name in minions if minions[name]['archetype'] == target]
+            return names, copies, levels
 
     def display_discovery(self, minions=False):
         """"
@@ -65,6 +100,8 @@ class Discovery:
         self.cards_discover = minions if minions else self.play_discovery()
         if self.megasaur:
             discover = str(''.join([self.card_megasaur(name) for name in self.cards_discover])).split('\n')[:-1]
+        elif minions and isinstance(minions[0], Minion):
+            discover =  str(''.join([str(minion) for minion in self.cards_discover])).split('\n')[:-1]
         else:
             discover =  str(''.join([str(Minion(name ,False, *[value for value in MINIONS[name].values()][1:])) for name in self.cards_discover])).split('\n')[:-1]
         border = "\n+{}+\n".format('-'*150)

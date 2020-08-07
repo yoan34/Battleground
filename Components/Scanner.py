@@ -14,7 +14,7 @@ from Components.Hero import Hero
 from Components.Minion import Minion
 
 from constants.position import *
-from constants.heroes import TIER_LIST
+from constants.heroes import LIST_HEROES
 from constants.minions import MINIONS, MINIONS_BY_TIER, MINION_BY_ARCHETYPE, BUFF_MEGASAUR
 
 # MAYBE HAND DIRECT ON PLAYER AND CHANGE 'bot_chose_a_hero'
@@ -104,17 +104,17 @@ class Scanner(Mouse):
                 print(" {}s no answer, stop the game.".format(waiting))
                 return
 
-    def bot_chose_a_hero(self):
+    def bot_chose_a_hero(self, archetype):
         """
         Scans the screen and pick the best hero.
         """
         print('Choose the best Hero...'.rjust(83), end='\r')
         screen, avatar, confidence = pyautogui.screenshot(region=ZONE_HEROES), False, 0.8
         while not avatar:
-            for hero in TIER_LIST:
-                position = pyautogui.locate(TIER_LIST[hero]['img'], screen, confidence=confidence)
+            for hero in LIST_HEROES:
+                position = pyautogui.locate(LIST_HEROES[hero]['img'], screen, confidence=confidence)
                 if position is not None:
-                    avatar = Hero(hero, *[value for value in TIER_LIST[hero].values()])
+                    avatar = Hero(hero, *[value for value in LIST_HEROES[hero].values()])
                     break
             confidence = round(confidence-0.1, 2)
             if not confidence:

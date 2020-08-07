@@ -7,6 +7,7 @@ class Hero:
 
     def __init__(self, name, tier, img, archetype, power):
         self.name = name
+        self.true_name = name
         self.archetype = archetype
         self.tier = tier
         self.img = img
@@ -19,7 +20,11 @@ class Hero:
         self.millificent = False
         self.ratking = ''
         self.aranna = False
+        self.mukla = False
         self.eudora = 0
+        self.rafaam = False
+        self.illidan = False
+        self.nefarian = False
         self.lichking = -1
         self.shudderwock = False
         self.maiev = []
@@ -48,7 +53,6 @@ class Hero:
             title = "+{}({})---+".format(s_title.center(10, '-'), self.power['cost'])
         else:
             title = "+{}+".format(s_title.center(16, '-'))
-
         body1 = "|{}|".format(' '*16) if self.can_power else disable
         body2 = "|{}|".format(self.power['view'][0].ljust(16)) if self.can_power else disable
         body3 = "|{}|".format(self.power['view'][1].ljust(16)) if self.can_power else disable

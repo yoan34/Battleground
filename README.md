@@ -1,6 +1,6 @@
 # Battleground
 The goal of this project is to simulate the Battlegrounds game mode (in the Hearthstone game) and to simulate thousands of games to train an IA.
-Currently my program simulates the servant recruitment part. It also simulates 36/40 possible heroes.
+Currently my program simulates the whole game. It also simulates 36/40 possible heroes.
 A Bot part exists but is not proposed at the launch of the program.(Because its not allow in game)
 
 to do: 

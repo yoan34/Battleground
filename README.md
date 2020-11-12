@@ -3,14 +3,18 @@ The goal of this project is to simulate the Battlegrounds game mode (in the Hear
 Currently my program simulates the whole game. It also simulates 36/40 possible heroes.
 A Bot part exists but is not proposed at the launch of the program.(Because its not allow in game)
 
-to do: 
+to simulate the project:
+<b>git clone https://github.com/yoan34/Battleground</b>
+<b>cd Battleground</b>
 
--Simulate the combat part between players
+create an virtual environnement
+<b>python -m venv env</b>
 
--Learn/create the feature to allow the program to storage/compare its state for practice.
+active the virtual environnement
+<b>.\env\scripts\activate</b>
 
--(optional) Create a better view of the simulation.
+install all dependencies:
+<b> pip install -r requirements.txt</b>
 
-this repository shows the code and can be run with the required dependencies listed in the requirements.txt file.
-
-The program does not display the description of the cards/minions used. 
+Run the programme: (only window console, because the programme change the size of the console, only the window console, else you will see an strange output.)
+<b>python prog.py</b>
